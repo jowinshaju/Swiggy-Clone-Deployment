@@ -1,29 +1,72 @@
 name: Swiggy Clone CI/CD
 
 on:
+  push:
+    branches:
+      - ci-cd-eks-deployment
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: swiggy-production
+  cancel-in-progress: false
+
 jobs:
-  runner-test:
-    name: Verify Self-Hosted Runner
+  build-and-deploy:
+    name: Build, Push and Deploy
     runs-on: self-hosted
+
+    env:
+      IMAGE_NAME: jowinshaju/swiggy-clone
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Verify Runner
+      - name: Verify Environment
         run: |
-          echo "GitHub Actions Runner is working!"
-          echo "Hostname: $(hostname)"
-          echo "User: $(whoami)"
-          echo "Current Directory: $(pwd)"
+          echo "Runner: $(hostname)"
+          echo "Branch: $GITHUB_REF_NAME"
+          docker --version
+          aws sts get-caller-identity
+          kubectl get nodes
 
-      - name: Verify Docker
-        run: docker --version
+      - name: Login to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+            --password-stdin
 
-      - name: Verify AWS Identity
-        run: aws sts get-caller-identity
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t "$IMAGE_NAME:$IMAGE_TAG" \
+            -t "$IMAGE_NAME:latest" .
 
-      - name: Verify Kubernetes Access
-        run: kubectl get nodes
+      - name: Push Docker Image
+        run: |
+          docker push "$IMAGE_NAME:$IMAGE_TAG"
+          docker push "$IMAGE_NAME:latest"
+
+      - name: Deploy to Amazon EKS
+        run: |
+          kubectl set image deployment/swiggy-deployment \
+            swiggy="$IMAGE_NAME:$IMAGE_TAG"
+
+      - name: Verify Kubernetes Rollout
+        run: |
+          kubectl rollout status deployment/swiggy-deployment \
+            --timeout=300s
+
+      - name: Verify Deployment
+        run: |
+          kubectl get deployment swiggy-deployment
+          kubectl get pods -o wide
+          kubectl get service swiggy-svc
+
+      - name: Logout from Docker Hub
+        if: always()
+        run: docker logout
