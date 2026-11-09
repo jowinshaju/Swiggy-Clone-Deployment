@@ -1,0 +1,29 @@
+name: Swiggy Clone CI/CD
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-test:
+    name: Verify Self-Hosted Runner
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Verify Runner
+        run: |
+          echo "GitHub Actions Runner is working!"
+          echo "Hostname: $(hostname)"
+          echo "User: $(whoami)"
+          echo "Current Directory: $(pwd)"
+
+      - name: Verify Docker
+        run: docker --version
+
+      - name: Verify AWS Identity
+        run: aws sts get-caller-identity
+
+      - name: Verify Kubernetes Access
+        run: kubectl get nodes
