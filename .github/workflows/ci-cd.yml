@@ -59,3 +59,55 @@ jobs:
           kubectl get pods -o wide
           kubectl get service swiggy-svc
 
+  verify-observability:
+    name: Verify Prometheus and Grafana
+    runs-on: self-hosted
+    needs: build-and-deploy
+
+    steps:
+      - name: Verify Prometheus
+        run: |
+          kubectl rollout status \
+            statefulset/prometheus-monitoring-kube-prometheus-prometheus \
+            -n monitoring --timeout=180s
+
+      - name: Verify Grafana
+        run: |
+          kubectl rollout status \
+            deployment/monitoring-grafana \
+            -n monitoring --timeout=180s
+
+      - name: Verify Prometheus Operator
+        run: |
+          kubectl rollout status \
+            deployment/monitoring-kube-prometheus-operator \
+            -n monitoring --timeout=180s
+
+      - name: Verify Node Exporter
+        run: |
+          kubectl rollout status \
+            daemonset/monitoring-prometheus-node-exporter \
+            -n monitoring --timeout=180s
+
+      - name: Verify kube-state-metrics
+        run: |
+          kubectl rollout status \
+            deployment/monitoring-kube-state-metrics \
+            -n monitoring --timeout=180s
+
+      - name: Display Monitoring Resources
+        run: |
+          echo "===== MONITORING PODS ====="
+          kubectl get pods -n monitoring -o wide
+
+          echo "===== MONITORING SERVICES ====="
+          kubectl get svc -n monitoring
+
+      - name: Verify Cluster Metrics
+        run: |
+          echo "===== NODE RESOURCE UTILIZATION ====="
+          kubectl top nodes
+
+          echo "===== POD RESOURCE UTILIZATION ====="
+          kubectl top pods -n monitoring
+
